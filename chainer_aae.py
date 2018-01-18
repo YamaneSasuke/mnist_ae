@@ -185,6 +185,7 @@ if __name__ == '__main__':
     epoch_loss_discriminator = []
 
     for epoch in range(1, n_epoch + 1):
+        print(epoch)
         loss_ae_list = []
         loss_g_list = []
         loss_d_list = []
@@ -254,13 +255,14 @@ if __name__ == '__main__':
 #                    loss_cluster_head.backward()
 #                    optimizer_cluster_head.update()
 
-                loss_ae_list.append(cuda.to_cpu(loss_reconstruction.data))
-                loss_g_list.append(cuda.to_cpu(loss_generator.data))
-                loss_d_list.append(cuda.to_cpu(loss_discriminator.data))
-            epoch_loss_autoencoder.append(np.mean(loss_ae_list))
-            epoch_loss_generator.append(np.mean(loss_g_list))
-            epoch_loss_discriminator.append(np.mean(loss_d_list))
+            loss_ae_list.append(cuda.to_cpu(loss_reconstruction.data))
+            loss_g_list.append(cuda.to_cpu(loss_generator.data))
+            loss_d_list.append(cuda.to_cpu(loss_discriminator.data))
+        epoch_loss_autoencoder.append(np.mean(loss_ae_list))
+        epoch_loss_generator.append(np.mean(loss_g_list))
+        epoch_loss_discriminator.append(np.mean(loss_d_list))
 
+        if epoch % 1 == 0:
             plt.plot(epoch_loss_autoencoder)
             plt.title("reconstruction loss")
             plt.legend(["loss_rec"], loc="upper right")
@@ -282,16 +284,18 @@ if __name__ == '__main__':
             plt.show()
             print('d loss:', epoch_loss_discriminator[epoch-1])
 
+        if epoch % 1 == 0:
             # OriginalとReconstrauctionの比較
             x_test, _, _ = dataset.test(batchsize, gpu=using_gpu)
             utils.draw_result(model, x_test)
 
-        n_sample = 100
-        x_test, _, _ = dataset.test(batchsize, gpu=using_gpu)
+        n_sample = 1000
+        x_test, y_test, _ = dataset.test(n_sample, gpu=using_gpu)
+        y_test = cuda.to_cpu(y_test)
         z_true = sampler.gaussian(n_sample, model.ndim_z, mean=0, var=1)
-        z_true = sampler.swiss_roll(n_sample, model.ndim_z, 10)
+#            z_true = sampler.swiss_roll(n_sample, model.ndim_z, 10)
 
-        z_fake = model.encoder(x_test)
+        _, z_fake = model.encode_x_yz(x_test)
         z_fake.to_cpu()
         z_fake = z_fake.data
 
@@ -303,6 +307,9 @@ if __name__ == '__main__':
 
         plt.figure(figsize=(10, 8))
         plt.title('fake sample')
-        plt.scatter(z_fake[:, 0], z_fake[:, 1], alpha=0.6)
+        plt.scatter(z_fake[:, 0], z_fake[:, 1], c=y_test, cmap="rainbow", alpha=0.6)
+        for i in range(10):
+            m = utils.get_mean(z_fake, y_test, i)
+            plt.text(m[0], m[1], "{}".format(i), fontsize=20)
         plt.grid()
         plt.show()
