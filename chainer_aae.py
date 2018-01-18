@@ -286,36 +286,23 @@ if __name__ == '__main__':
             x_test, _, _ = dataset.test(batchsize, gpu=using_gpu)
             utils.draw_result(model, x_test)
 
-#        n_sample = 100
-#        x_sample, y_sample = x_test[:n_sample], y_test[:n_sample]
-#        real_sample =np.random.normal(real_mean, real_var, (batchsize, 50)).astype(np.float32)
-#        real_sample = swiss_roll(n_sample, 2, 10)
+        n_sample = 100
+        x_test, _, _ = dataset.test(batchsize, gpu=using_gpu)
+        z_true = sampler.gaussian(n_sample, model.ndim_z, mean=0, var=1)
+        z_true = sampler.swiss_roll(n_sample, model.ndim_z, 10)
 
-#        z = model.encoder(chainer.cuda.to_gpu(x_sample))
-#        z.to_cpu()
-#        z = z.data
-#
-#        plt.figure(figsize=(10, 8))
-#        plt.title('real sample')
-#        plt.scatter(real_sample[:, 0], real_sample[:, 1], alpha=0.6)
-#        plt.grid()
-#        plt.show()
-#
-#
-#        plt.figure(figsize=(10, 8))
-#        fig = plt.figure()
-#        ax = Axes3D(fig)
-#
-#        ax.set_xlabel("X-axis")
-#        ax.set_ylabel("Y-axis")
-#        ax.set_zlabel("Z-axis")
-#        ax.scatter(z[:, 0], z[:, 1], z[:, 2], c=y_sample, cmap="rainbow", alpha=0.3)
-#        plt.figure(figsize=(10, 8))
-#        plt.scatter(z[:, 0], z[:, 1], c=y_sample, cmap="rainbow", alpha=0.6)
-#        for i in range(10):
-#            m = utils.get_mean(z, y_sample, i)
-#            plt.text(m[0], m[1], "{}".format(i), fontsize=20)
-#
-#        plt.colorbar()
-#        plt.grid()
-#        plt.show()
+        z_fake = model.encoder(x_test)
+        z_fake.to_cpu()
+        z_fake = z_fake.data
+
+        plt.figure(figsize=(10, 8))
+        plt.title('real sample')
+        plt.scatter(z_true[:, 0], z_true[:, 1], alpha=0.6)
+        plt.grid()
+        plt.show()
+
+        plt.figure(figsize=(10, 8))
+        plt.title('fake sample')
+        plt.scatter(z_fake[:, 0], z_fake[:, 1], alpha=0.6)
+        plt.grid()
+        plt.show()
