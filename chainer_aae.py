@@ -10,6 +10,8 @@ from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import operator
+from functools import reduce
 
 import chainer
 import chainer.functions as F
@@ -25,11 +27,12 @@ import utils
 
 class AdvarsarialAutoEncoder(chainer.Chain):
     """Variational AutoEncoder"""
-    def __init__(self, ndim_x=28*28, ndim_y=20, ndim_z=2, ndim_h=1000):
+    def __init__(self, ndim_x=28*28, ndim_y=20, ndim_z=2, ndim_h=1000, cluster_head_distance_threshold=2):
         self.ndim_x = ndim_x
         self.ndim_y = ndim_y
         self.ndim_z = ndim_z
         self.ndim_h = ndim_h
+        self.cluster_head_distance_threshold = cluster_head_distance_threshold
         super(AdvarsarialAutoEncoder, self).__init__(
             # encoder
             le1 = L.Linear(ndim_x, ndim_h),
@@ -102,6 +105,58 @@ class AdvarsarialAutoEncoder(chainer.Chain):
         if apply_softmax:
             return F.softmax(logit)
         return logit
+
+    # compute combination nCr
+    def nCr(self, n, r):
+        r = min(r, n - r)
+        if r == 0: return 1
+        numer = reduce(operator.mul, range(n, n - r, -1))
+        denom = reduce(operator.mul, range(1, r + 1))
+        return numer // denom
+
+    def compute_distance_of_cluster_heads(self):
+        # list all possible combinations of two cluster heads
+        num_combination = self.nCr(self.ndim_y, 2)
+
+        # a_labels
+        # [0, 1, 0, 0]
+        # [0, 0, 1, 0]
+        # [0, 0, 1, 0]
+        # [0, 0, 0, 1]
+        # [0, 0, 0, 1]
+        # [0, 0, 0, 1]
+        a_labels = np.zeros((num_combination, self.ndim_y), dtype=np.float32)
+        for i in range(1, self.ndim_y):
+            for n in range(i):
+                j = int(0.5 * i * (i - 1) + n)
+                a_labels[j, i] = 1
+
+        # b_labels
+        # [1, 0, 0, 0]
+        # [1, 0, 0, 0]
+        # [0, 1, 0, 0]
+        # [1, 0, 0, 0]
+        # [0, 1, 0, 0]
+        # [0, 0, 1, 0]
+        b_labels = np.zeros((num_combination, self.ndim_y), dtype=np.float32)
+        for i in range(1, self.ndim_y):
+            for n in range(i):
+                j = int(0.5 * i * (i - 1) + n)
+                b_labels[j, n] = 1
+
+        xp = self.xp
+        if xp is not np:
+            a_labels = cuda.to_gpu(a_labels)
+            b_labels = cuda.to_gpu(b_labels)
+
+        a_vector = self.cluster_head(a_labels)
+        b_vector = self.cluster_head(b_labels)
+        distance = F.sqrt(F.sum((a_vector - b_vector) ** 2, axis=1))
+
+        # clip
+        distance = F.clip(distance, 0.0, float(self.cluster_head_distance_threshold))
+
+        return distance
 
 
 def swiss_roll(batchsize, ndim, num_labels):
@@ -238,13 +293,13 @@ if __name__ == '__main__':
                     optimizer.update()
 
                 ### additional cost ###
-#                if True:
-#                    distance = model.compute_distance_of_cluster_heads()
-#                    loss_cluster_head = -F.sum(distance)
-#
-#                    model.cleargrads()
-#                    loss_cluster_head.backward()
-#                    optimizer_cluster_head.update()
+                if True:
+                    distance = model.compute_distance_of_cluster_heads()
+                    loss_cluster_head = -F.sum(distance)
+
+                    model.cleargrads()
+                    loss_cluster_head.backward()
+                    optimizer.update()
 
             loss_ae_list.append(cuda.to_cpu(loss_reconstruction.data))
             loss_g_list.append(cuda.to_cpu(loss_generator.data))
@@ -278,7 +333,7 @@ if __name__ == '__main__':
         if epoch % 1 == 0:
             # OriginalとReconstrauctionの比較
             x_test, _, _ = dataset.test(batchsize, gpu=using_gpu)
-            utils.draw_result(model, x_test)
+            utils.draw_result(model, x_test, n=1)
 
         n_sample = 1000
         x_test, y_test, _ = dataset.test(n_sample, gpu=using_gpu)
@@ -290,13 +345,13 @@ if __name__ == '__main__':
         z_fake.to_cpu()
         z_fake = z_fake.data
 
-        plt.figure(figsize=(10, 8))
+#        plt.figure(figsize=(10, 8))
         plt.title('real sample')
         plt.scatter(z_true[:, 0], z_true[:, 1], alpha=0.6)
         plt.grid()
         plt.show()
 
-        plt.figure(figsize=(10, 8))
+#        plt.figure(figsize=(10, 8))
         plt.title('fake sample')
         plt.scatter(z_fake[:, 0], z_fake[:, 1], c=y_test, cmap="rainbow", alpha=0.6)
         for i in range(10):
