@@ -23,7 +23,6 @@ import sampler
 import utils
 
 
-# Original implementation: https://github.com/chainer/chainer/tree/master/examples/vae
 class AdvarsarialAutoEncoder(chainer.Chain):
     """Variational AutoEncoder"""
     def __init__(self, ndim_x=28*28, ndim_y=20, ndim_z=2, ndim_h=1000):
@@ -131,15 +130,6 @@ if __name__ == '__main__':
     ndim_z = 2
     ndim_h = 1000
 
-    real_var = 1
-    real_mean = 0
-
-    update_interval_rec = 1
-    update_interval_g = 10
-    update_interval_d = 1
-    rec_w = 1
-    g_w = 0.01
-    d_w = 1
     alpha = 0.001
 
     test = False
@@ -209,7 +199,8 @@ if __name__ == '__main__':
                 if True:
                     y_onehot_fake_u, z_fake_u = model.encode_x_yz(x_u, apply_softmax_y=True)
 
-                    z_true = sampler.gaussian(batchsize, model.ndim_z, mean=0, var=1)
+#                    z_true = sampler.gaussian(batchsize, model.ndim_z, mean=0, var=1)
+                    z_true = sampler.swiss_roll(batchsize, model.ndim_z, 10)
                     y_onehot_true = sampler.onehot_categorical(batchsize, model.ndim_y)
                     if using_gpu:
                         z_true = cuda.to_gpu(z_true)
@@ -292,8 +283,8 @@ if __name__ == '__main__':
         n_sample = 1000
         x_test, y_test, _ = dataset.test(n_sample, gpu=using_gpu)
         y_test = cuda.to_cpu(y_test)
-        z_true = sampler.gaussian(n_sample, model.ndim_z, mean=0, var=1)
-#            z_true = sampler.swiss_roll(n_sample, model.ndim_z, 10)
+#        z_true = sampler.gaussian(n_sample, model.ndim_z, mean=0, var=1)
+        z_true = sampler.swiss_roll(n_sample, model.ndim_z, 10)
 
         _, z_fake = model.encode_x_yz(x_test)
         z_fake.to_cpu()
